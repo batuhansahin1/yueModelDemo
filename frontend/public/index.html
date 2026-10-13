@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YuE2 Demo</title>
+  <meta name="description" content="YuE2 müzik üretim modeli için demo: açıklama ve sözlerden şarkı (Text to Song) ya da bir şarkının melodisiyle yeni şarkı (Cover).">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="js/theme.js"></script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">İçeriğe geç</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="#t2s" aria-label="YuE2 Demo">
+        <img src="favicon.svg" alt="" width="30" height="30">
+        <span class="brand-name">YuE2</span>
+        <span class="brand-tag">Demo</span>
+      </a>
+      <nav class="tabs" aria-label="Bölümler">
+        <a href="#t2s" data-view="t2s">✦ Text to Song</a>
+        <a href="#cover" data-view="cover">🎵 Cover</a>
+        <a href="#history" data-view="history">🗂 Geçmiş</a>
+        <a href="#server" data-view="server">Sunucu</a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="status-pill" id="status-pill" href="#server" data-state="unknown" title="Model sunucusunun durumu">
+          <span class="dot" aria-hidden="true"></span><span class="status-text">Bağlanıyor…</span>
+        </a>
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="Açık/koyu tema" title="Açık/koyu tema">◐</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="banner" id="offline-banner" role="status" hidden></div>
+
+    <!-- Text to Song -->
+    <section class="view" id="view-t2s" data-view-name="t2s">
+      <header class="view-head">
+        <p class="eyebrow">✦ Text to Song</p>
+        <h1>Açıklama ve sözlerden yeni bir şarkı</h1>
+        <p class="lead">Melodiyi ve akorları model kendisi besteler; referans şarkı ya da nota gerekmez.</p>
+      </header>
+      <div class="workspace" id="t2s-workspace">
+        <div class="panel" id="t2s-card">
+          <div class="subtabs" role="tablist" aria-label="Text to Song">
+            <button type="button" role="tab" data-subtab="prompt" aria-selected="true">Prompt</button>
+            <button type="button" role="tab" data-subtab="settings" aria-selected="false">Model ayarları</button>
+          </div>
+          <div class="stack" data-panel="prompt" role="tabpanel">
+            <label class="field">
+              <span class="field-label">Şarkı açıklaması</span>
+              <span class="hint">Tema, sahne ve ifade</span>
+              <textarea id="t2s-description" rows="4" maxlength="3000"
+                placeholder="120 BPM'de, sürükleyici ritimli ve kadın vokalli siberpunk bir synth-pop şarkısı."></textarea>
+              <span class="counter" id="t2s-description-count"></span>
+            </label>
+            <label class="field">
+              <span class="field-label">Şarkı sözleri</span>
+              <span class="hint">Yapıştırın ya da kendiniz yazın. Bölümleri [verse] [chorus] [bridge] ile ayırın.</span>
+              <textarea id="t2s-lyrics" class="lyrics" rows="12" maxlength="5000"
+                placeholder="[verse]&#10;Neon ışıklar soluyor caddede&#10;Her gölge seni getiriyor aklıma&#10;&#10;[chorus]&#10;Gece kapansa da üstüme&#10;Yine sana dönerim"></textarea>
+              <span class="counter" id="t2s-lyrics-count"></span>
+            </label>
+            <div class="toolbar">
+              <div class="popover-anchor">
+                <button type="button" class="pill-btn" id="t2s-voice-button" aria-expanded="false" aria-controls="t2s-voice-panel">🎙 Vokal: Varsayılan</button>
+                <div class="popover" id="t2s-voice-panel" hidden>
+                  <p class="popover-title">Vokal</p>
+                  <div class="pills pills-3" id="t2s-voices" role="radiogroup" aria-label="Vokal"></div>
+                </div>
+              </div>
+              <div class="popover-anchor">
+                <button type="button" class="pill-btn" id="t2s-style-button" aria-expanded="false" aria-controls="t2s-style-panel">🎚 Tür</button>
+                <div class="popover popover-wide" id="t2s-style-panel" hidden>
+                  <p class="popover-title">Tür</p>
+                  <div class="pills pills-3" id="t2s-styles" role="group" aria-label="Tür"></div>
+                  <input type="text" id="t2s-custom-style" maxlength="200" aria-label="Özel tür"
+                    placeholder="Özel tür... (ör. Anadolu rock, bağlama)">
+                  <div class="popover-actions"><button type="button" class="btn btn-sm" id="t2s-style-close">Tamam</button></div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm toolbar-end" id="t2s-example">Örnekle doldur</button>
+            </div>
+          </div>
+          <div data-panel="settings" role="tabpanel" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Cover -->
+    <section class="view" id="view-cover" data-view-name="cover" hidden>
+      <header class="view-head">
+        <p class="eyebrow">🎵 Cover</p>
+        <h1>Bir şarkının melodisiyle yeni bir şarkı</h1>
+        <p class="lead">Referans şarkı notaya çevrilir; yeni şarkı onun melodisini, akorlarını ve yapısını takip eder.
+          Tarz, enstrümanlar ve vokal etiketlerden gelir.</p>
+      </header>
+      <div class="workspace" id="cover-workspace">
+        <div class="panel" id="cover-card">
+          <div class="subtabs" role="tablist" aria-label="Cover">
+            <button type="button" role="tab" data-subtab="prompt" aria-selected="true">Prompt</button>
+            <button type="button" role="tab" data-subtab="settings" aria-selected="false">Model ayarları</button>
+          </div>
+          <div class="stack" data-panel="prompt" role="tabpanel">
+            <section class="block">
+              <div class="block-head"><h3>Referans şarkı</h3><span class="hint">MP3 · WAV · FLAC · OGG</span></div>
+              <input type="file" id="cover-file" class="visually-hidden"
+                accept=".mp3,.wav,.flac,.ogg,audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/ogg">
+              <label class="dropzone" id="cover-drop" for="cover-file">
+                <span class="dropzone-icon" aria-hidden="true">⤒</span>
+                <span><strong>Dosya seçin</strong> ya da buraya sürükleyin</span>
+                <span class="hint">Yalnızca kullanma hakkınız olan kayıtları yükleyin.</span>
+              </label>
+              <div class="file-card" id="cover-file-card" hidden>
+                <div class="file-meta">
+                  <span class="file-icon" aria-hidden="true">🎵</span>
+                  <div class="file-text"><p class="file-name" id="cover-file-name"></p><p class="hint" id="cover-file-info"></p></div>
+                  <button type="button" class="btn btn-sm btn-ghost" id="cover-file-change">Değiştir</button>
+                  <button type="button" class="btn btn-sm btn-ghost" id="cover-file-remove">Kaldır</button>
+                </div>
+                <audio id="cover-file-audio" controls preload="metadata"></audio>
+              </div>
+              <div class="grid-3">
+                <label class="field"><span class="field-label">Başlangıç (sn)</span>
+                  <input type="number" id="cover-start" min="0" step="any" value="0"></label>
+                <label class="field"><span class="field-label">Süre (sn)</span>
+                  <input type="number" id="cover-duration" min="0" step="any" value="0">
+                  <span class="hint">0 = tüm şarkı</span></label>
+                <label class="field"><span class="field-label">Tempo (BPM)</span>
+                  <input type="number" id="cover-bpm" min="0" max="299" step="any" value="0">
+                  <span class="hint">0 = otomatik. Yalnızca Basit analiz kullanır.</span></label>
+              </div>
+              <fieldset class="field">
+                <legend class="field-label">Nota çıkarıcı</legend>
+                <div class="choices choices-2" id="cover-transcribers" role="radiogroup" aria-label="Nota çıkarıcı"></div>
+                <p class="hint hint-warn" id="cover-sheetsage-note" hidden>SheetSage2 bu sunucuda kurulu değil; analiz hata verir.
+                  <em>Basit analiz</em>'i seçin ya da SheetSage2'yi kurun (README).</p>
+              </fieldset>
+              <fieldset class="field">
+                <legend class="field-label">Referans melodisi</legend>
+                <div class="choices choices-2" id="cover-modes" role="radiogroup" aria-label="Referans melodisi"></div>
+              </fieldset>
+              <div class="row"><button type="button" class="btn" id="cover-preview">Melodiyi çıkar (önizle)</button></div>
+              <div class="note" id="cover-info"></div>
+            </section>
+
+            <section class="block">
+              <div class="block-head"><h3>Tür / stil etiketleri</h3></div>
+              <p class="hint">Tür, enstrüman, ruh hali, vokal cinsiyeti ve tınısını tarif edin. Listede olmayan etiketleri de
+                yazabilirsiniz (ör. Turkish, female vocal).</p>
+              <div id="cover-tags"></div>
+            </section>
+
+            <section class="block">
+              <div class="block-head"><h3>Şarkı sözleri</h3></div>
+              <div class="row row-wrap">
+                <button type="button" class="btn btn-accent" id="cover-recognize">✨ Sözleri tanı</button>
+                <label class="inline-field">Söz dili <select id="cover-language"></select></label>
+              </div>
+              <p class="hint">Türkçe algılanır ya da seçilirse Türkçe'ye özel model kullanılır (daha doğru, daha yavaş).</p>
+              <textarea id="cover-lyrics" class="lyrics" rows="16" aria-label="Şarkı sözleri"
+                placeholder="[verse]&#10;İlk kıta...&#10;&#10;[chorus]&#10;Nakarat..."></textarea>
+              <p class="hint">Bölümleri köşeli parantezle adlandırın: [verse] [chorus] [bridge]. Sözleri tanıttıysanız
+                kelimeleri düzeltebilirsiniz; bölüm etiketlerini silmeyin, sırasını değiştirmeyin.</p>
+            </section>
+
+            <details class="block group" open>
+              <summary><span>🕒 Zaman çizelgesi: sözler şarkının neresinde söylenecek</span></summary>
+              <div class="timeline" id="cover-timeline"></div>
+            </details>
+
+            <div class="row row-wrap">
+              <button type="button" class="btn btn-sm" id="cover-example">Örneği yükle</button>
+              <label class="btn btn-sm">Projeyi yükle
+                <input type="file" id="cover-project-file" class="visually-hidden" accept=".json,application/json"></label>
+              <button type="button" class="btn btn-sm" id="cover-project-save">Projeyi kaydet</button>
+            </div>
+          </div>
+          <div data-panel="settings" role="tabpanel" hidden></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section class="view" id="view-history" data-view-name="history" hidden>
+      <header class="view-head">
+        <p class="eyebrow">🗂 Geçmiş</p>
+        <h1>Önceki üretimler</h1>
+        <p class="lead">Sunucudaki son 50 üretim. Bir üretimi seçip dinleyebilir, girdilerini ve ayarlarını forma geri
+          yükleyebilirsiniz.</p>
+      </header>
+      <div class="history">
+        <div class="panel history-list-panel">
+          <div class="history-tools">
+            <div class="segmented" role="group" aria-label="Filtre">
+              <button type="button" data-filter="all" aria-pressed="true">Tümü</button>
+              <button type="button" data-filter="t2s" aria-pressed="false">✦ Text to Song</button>
+              <button type="button" data-filter="cover" aria-pressed="false">🎵 Cover</button>
+            </div>
+            <button type="button" class="btn btn-sm" id="history-refresh">Yenile</button>
+          </div>
+          <ul class="history-list" id="history-list"></ul>
+        </div>
+        <div class="panel history-detail" id="history-detail"></div>
+      </div>
+    </section>
+
+    <!-- Server -->
+    <section class="view" id="view-server" data-view-name="server" hidden>
+      <header class="view-head">
+        <p class="eyebrow">Sunucu</p>
+        <h1>Model sunucusu</h1>
+        <p class="lead">Bu site modele web sunucusunun <code>/api</code> vekili üzerinden bağlanır; model sunucusu
+          (<code>server/yue2_server.py</code>) dışarıya açılmaz.</p>
+      </header>
+      <div class="panel server-panel">
+        <div id="server-status"></div>
+        <dl class="facts facts-wide" id="server-facts"></dl>
+        <div class="row"><button type="button" class="btn" id="server-check">Bağlantıyı test et</button></div>
+        <details class="group">
+          <summary><span>Ham yanıt (GET /api/health)</span></summary>
+          <pre class="code-block" id="server-json"></pre>
+        </details>
+        <div class="note">
+          <p><strong>Model sunucusunu başlatma</strong> (proje klasöründe, ayrı bir terminalde):</p>
+          <pre class="code-block">./start_model_server.sh --preload</pre>
+          <p>Modelsiz deneme: <code>./frontend/start.sh --mock</code>. Model sunucusunun adresi web sunucusu başlatılırken
+            verilir: <code>./frontend/start.sh --api http://127.0.0.1:7861</code>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Model: YuE2 (HKUST / M-A-P). Bu sayfada üretilen şarkılar yapay zekâ ile üretilir (AI-generated); üretilen içeriğin
+      özgünlüğü ve telif uyumu kullanıcının sorumluluğundadır.</p>
+  </footer>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

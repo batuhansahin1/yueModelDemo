@@ -1,0 +1,4 @@
+# cmd.exe LF satır sonlu .bat dosyalarında etiketleri (goto, call :etiket) yanlış okuyabilir.
+*.bat text eol=crlf
+*.sh text eol=lf
+*.whl binary

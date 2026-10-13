@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Ortam
+venv/
+.venv/
+# setup_windows.bat bunları yue-ui'nin yanına kurar; depo başka bir yere klonlanırsa diye burada da dışarıda.
+yue_ortam/
+sheetsage_ortam/
+.python/
+
+# Model ağırlıkları: Windows'ta setup_windows.bat (download_models.py) indirir
+models/
+*.safetensors
+*.th
+*.pt
+*.ckpt
+.cache/
+
+# Ses dosyaları: referans şarkılar ve üretilen şarkılar depoya girmez (telif)
+*.mp3
+*.wav
+*.flac
+*.ogg
+
+# Üretilenler: iş çıktıları, yüklemeler, loglar, Colab paketi
+outputs/
+logs/
+*.log
+colab/*.zip
+.gradio/
+
+# Gizli ayarlar (ör. YUE2_WEB_PASSWORD)
+.env
+
+# Node (frontend testleri)
+node_modules/
+
+# macOS / Windows / editör
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

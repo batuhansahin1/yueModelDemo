@@ -1,0 +1,3 @@
+# YuE2 - UI (Gradio arayüzü). Model bağımlılıkları ../yue_ortam içindedir.
+gradio>=5.20,<6
+requests
