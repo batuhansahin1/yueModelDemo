@@ -4,7 +4,7 @@
 **Kimin için:** Projeyi devralan mühendis. Python ve temel web bilgisi varsayılır; müzik üretim modelleri hakkında
 ön bilgi gerekmez (kısa sözlük: [bölüm 12](#12-sözlük)).
 
-Bu belge projenin bugünkü durumunu, nasıl ayağa kaldırılacağını, Colab paketinin ve notebook'un nasıl üretildiğini,
+Bu belge projenin bugünkü durumunu, nasıl ayağa kaldırılacağını (Mac, Windows, Ubuntu), Colab paketinin ve notebook'un nasıl üretildiğini,
 model ve arayüz modlarını ve açık işleri tek yerde toplar. Ayrıntı gereken her konuda ilgili belgeye bağlantı verilir
 (belge haritası: [bölüm 11](#11-belge-haritası)).
 
@@ -30,16 +30,17 @@ modeller kullanılır: SheetSage2 (nota çıkarma), Demucs (vokal ayırma), Whis
 | Gradio arayüzü (`source/yue2_ui.py`) | Çalışıyor. Colab'da kullanılan arayüz bu |
 | Web arayüzü (`frontend/`) | Çalışıyor, testleri var. Yayına alınmadı; Colab paketinde yok |
 | Colab | Notebook ve paketleme betiği hazır; paket güncel koddan `make_bundle.sh` ile üretilir (bkz. [6.2](#62-paket-make_bundlesh)). L4'te ~1× gerçek zaman ölçüldü (4:45'lik cover 282 sn) |
-| Windows + RTX 3050 8 GB | Kurulum betikleri ve `--phase-offload` hazır. **Gerçek donanımda hiç çalıştırılmadı** |
+| Windows + RTX 3050 8 GB | Kurulum betikleri ve `--phase-offload` hazır. **Gerçek donanımda hiç çalıştırılmadı**. Adım adım: [4.4](#44-windows-başlangıç-sihirbazı) |
+| Ubuntu (Linux + NVIDIA) | Kod Linux'u destekliyor (`.sh` betikleri, `bin/python` yolları); kurulum betiği yok, **hiç denenmedi**. Elle kurulum ve olası sorunlar: [4.5](#45-ubuntu-kurulum-ve-başlatma), [4.6](#46-ubuntu-olası-sorunlar-ve-çözümleri) |
 | Herkese açık site için kuyruk (Redis) | Tasarım kararı verildi, kod yok (bkz. [bölüm 10](#10-açık-işler)) |
 
 ---
 
 ## 2. Depo ve klasör düzeni
 
-**Git deposu yalnızca `yue-ui/` klasörüdür.** Remote: `https://github.com/batuhansahin1/yueModelDemo` (`main`, tek
-commit `e050e98`, 13 Ekim). Şu belgeler henüz commit edilmedi: `docs/gun-gun-gelistirme-plani.md`,
-`docs/model-calisma-prensibi.md`, `docs/rtx3050-windows-raporu.md` ve bu belge.
+**Git deposu yalnızca `yue-ui/` klasörüdür.** Remote: `https://github.com/batuhansahin1/yueModelDemo` (`main`;
+`e050e98` 13 Ekim, `3aa72e0` 16 Ekim: bu belge ve `model-calisma-prensibi.md`). Şu belgeler henüz commit edilmedi:
+`docs/gun-gun-gelistirme-plani.md`, `docs/rtx3050-windows-raporu.md`.
 
 Betikler ağırlıkları ve Python ortamlarını `yue-ui`'nin **bir üst klasöründe** arar. Bu yüzden depo her zaman
 `<kök>/yue-ui` olarak klonlanır:
@@ -223,7 +224,432 @@ CUDA/MPS farkları: [yapay-zeka-model-entegrasyonu.md](yapay-zeka-model-entegras
 
 Ayrıntı: [README › Windows](../README.md#windows), [rtx3050-windows-raporu.md](rtx3050-windows-raporu.md).
 
-### 4.4 Model sunucusu seçenekleri
+### 4.4 Windows: başlangıç sihirbazı
+
+4.3'teki adımların kontrol noktalı, ayrıntılı hâli; hedef makine aynı (RTX 3050 8 GB, monitör karta bağlı).
+
+Adımları sırayla izle. Her adımın **✔** satırındaki çıktıyı görmeden sonrakine geçme; görmezsen aynı adımın **✖**
+satırına bak. Adım 0–4 bir kez yapılır; sonraki günlerde adım 6 yeterlidir (*Her gün* kutusu). Komutlar **cmd**
+(Komut İstemi) içindir. Windows'ta tek ortam (`yue_ortam`) hem model sunucusunu hem iki arayüzü çalıştırır.
+
+**Adım 0 — Ön koşullar**
+
+| Gerekli | Nasıl kontrol edilir |
+|---|---|
+| NVIDIA ekran kartı, güncel sürücü (paylaşımlı bellek için 536.40+) | `nvidia-smi` → kart adı ve sürücü sürümü |
+| Git for Windows | `git --version` |
+| ~30 GB boş disk: ortamlar + ~15 GB ağırlık (`models` 12 GB + MERT-v2 2.4 GB). MERT-v2, `C:` altındaki Hugging Face önbelleğine iner | Dosya Gezgini → Bu bilgisayar |
+| ~16 GB RAM (`--phase-offload` modelin yarısını RAM'de bekletir) | Görev Yöneticisi → Performans |
+| İnternet, yalnızca kurulumda (sonra her şey çevrimdışı çalışır) | |
+
+Python, CUDA araç seti (toolkit) ya da ffmpeg kurmak **gerekmez**: uv Python'u indirir, PyTorch paketleri CUDA'yı
+kendisi getirir, MP3 okuma/yazma soundfile ile yapılır (Mac'te ffmpeg olmadan çalışıyor).
+
+✖ `nvidia-smi` tanınmıyorsa sürücü kurulu değildir: NVIDIA'nın sitesinden kur, bilgisayarı yeniden başlat. AMD ya da
+Intel kartta model CPU'da çalışır ve kullanılamayacak kadar yavaştır.
+
+**Adım 1 — Klasör ve depo**
+
+```bat
+mkdir C:\yueModel
+cd /d C:\yueModel
+git clone https://github.com/batuhansahin1/yueModelDemo.git yue-ui
+cd yue-ui
+```
+
+- Kısa, boşluksuz, Türkçe karakter içermeyen bir yol kullan. Ağırlıklar ve ortamlar `yue-ui`'nin yanına
+  (`C:\yueModel\`) kurulur.
+- Depoyu GitHub'dan ZIP olarak değil, `git clone` ile al. `.gitattributes`, `.bat` dosyalarını CRLF satır sonuyla
+  çıkarır; LF satır sonlu `.bat`'larda `cmd.exe` etiketleri (`goto`, `call :etiket`) yanlış okuyabilir.
+- Masaüstü ya da Belgeler klasörüne kurma: bunlar çoğu zaman OneDrive ile eşitlenir ve OneDrive ~15 GB ağırlığı ve
+  binlerce ortam dosyasını yüklemeye çalışır. `C:\yueModel` OneDrive dışındadır.
+
+✔ `dir` çıktısında `setup_windows.bat` ve `start_model_server.bat` var.
+✖ `'git' is not recognized…`: Git for Windows'u kur ve **yeni** bir cmd penceresi aç.
+
+**Adım 2 — (İsteğe bağlı) Ağırlıkları Mac'ten getir**
+
+İnternet yavaşsa Mac'teki `yueModel/models` klasörünü `C:\yueModel\models` olarak kopyala. USB disk exFAT ya da NTFS
+olmalı; FAT32 7.3 GB'lık dosyayı almaz. Ortam klasörleri (`yue_ortam`, `sheetsage_ortam`, `venv`, `.python`)
+**kopyalanmaz**, Windows'ta çalışmazlar. MERT-v2 Hugging Face önbelleğinde durduğu için kurulumda yine iner. `C:`
+darsa kurulumdan önce `setx HF_HOME D:\hf_cache` çalıştırıp yeni bir pencere aç.
+
+✔ `dir C:\yueModel\models\YuE2-3B\model.safetensors` dosyayı gösteriyor.
+
+**Adım 3 — Kurulum (`setup_windows.bat`)**
+
+Betiği çift tıklayarak değil, açık bir cmd penceresinden çalıştır; hata olursa mesaj ekranda kalır.
+
+```bat
+cd /d C:\yueModel\yue-ui
+setup_windows.bat
+```
+
+SheetSage2 istenmezse `setup_windows.bat --no-sheetsage` (Cover'da *Basit analiz* kullanılır). Betik beş adımda
+ilerler:
+
+| Satır | Ne yapar | ✔ Görmen gereken |
+|---|---|---|
+| `=== 1/5 Ekran karti` | Kartı yazar | `NVIDIA GeForce RTX 3050, 8192 MiB, <sürücü>` |
+| `=== 2/5 uv` | uv yoksa PowerShell ile kurar | Hata yok |
+| `=== 3/5 YuE2 ortami` | `..\yue_ortam`: Python 3.12, CUDA'lı torch 2.10, yue2, Demucs, Gradio | `torch 2.10.0+cu128 \| CUDA True \| yue2 0.1.5`. **`CUDA False` ise devam etme** |
+| `=== 4/5 Model agirliklari` | `download_models.py`: eksik ağırlıkları indirir (~15 GB) | Her model için `Var:` ya da `İndiriliyor:` |
+| `=== 5/5 SheetSage2 ortami` | `..\sheetsage_ortam`: Python 3.11, torch 2.8 | `SheetSage2 hazir \| torch 2.8.0+cu128 \| CUDA True` |
+| Son | | `Kurulum tamam.` |
+
+✖ Olmazsa:
+- **Yarıda kaldı** (bağlantı koptu, pencere kapandı): aynı komutu tekrar çalıştır. Kurulu olanlar atlanır, indirme
+  kaldığı yerden sürer.
+- **`uv kurulamadi`**: PowerShell ya da antivirüs engellemiş olabilir. uv'yi
+  [kurulum sayfasından](https://docs.astral.sh/uv/getting-started/installation/) elle kur, yeni pencerede tekrar
+  çalıştır.
+- **`CUDA False`**: önce sürücüyü güncelle. Düzelmezse ortamı silip eski CUDA sürümüyle kur. Kurulu torch aynı sürüm
+  numarasını (`2.10.0`) taşıdığı için yalnızca `TORCH_CUDA`'yı değiştirmek yetmez, torch yeniden inmez:
+  `rmdir /s /q ..\yue_ortam` → `set TORCH_CUDA=cu126` → aynı pencerede `setup_windows.bat`. SheetSage2'de de aynı
+  sorun varsa `..\sheetsage_ortam` da silinir.
+- **`… Mac/Linux'tan kopyalanmis bir ortam`**: `rmdir /s /q ..\yue_ortam` (ya da `..\sheetsage_ortam`), tekrar
+  çalıştır.
+- **`Uyari: SheetSage2 kurulamadi`**: Text to Song ve Cover yine çalışır; Cover'da *Nota çıkarıcı: Basit analiz* seç.
+
+**Adım 4 — NVIDIA Denetim Masası**
+
+Masaüstüne sağ tık → *NVIDIA Denetim Masası* → *3D ayarlarını yönet* → *CUDA - Sysmem Fallback Policy* =
+**Driver Default**. *Prefer No Sysmem Fallback* seçiliyse karta sığmayan uzun şarkılar yavaşlamak yerine bellek
+hatası verir. Panel Türkçeyse ayarın adı çevrilmiş olabilir; listede "Sysmem Fallback" ya da "sistem belleği" geçen
+CUDA satırını ara. Ayar listede hiç yoksa sürücü 536.40'tan eskidir.
+
+**Adım 5 — Modelsiz deneme**
+
+```bat
+frontend\start.bat --mock
+```
+
+✔ `Mock model sunucusu: http://127.0.0.1:7862 …` satırı çıkar. Tarayıcıda http://127.0.0.1:7870 → Text to Song →
+*Şarkı üret*: birkaç saniyede kısa bir deneme tonu çalar. Bu, ortamın ve arayüzün sağlam olduğunu modeli beklemeden
+gösterir. Ctrl+C ile kapat; mock sunucu da kapanır.
+✖ `Mock sunucusu baslamadi; port 7862 dolu olabilir`: `set YUE2_MOCK_PORT=7863`, tekrar.
+
+Windows'ta otomatik test betiği yok: `frontend/test.sh` bash betiğidir ve `venv/bin/python`'u arar. Windows'taki
+doğrulama bu adımdaki mock denemesidir; testler Mac'te ya da Ubuntu'da çalıştırılır.
+
+**Adım 6 — Gerçek model (iki pencere)**
+
+Pencere 1, model sunucusu:
+
+```bat
+cd /d C:\yueModel\yue-ui
+start_model_server.bat --preload
+```
+
+✔ 8 GB kartta açılışta şu satırlar görünür (sayılar karta ve o anki boş belleğe göre değişir):
+
+```
+--budget auto: NVIDIA GeForce RTX 3050, … GiB (… GiB boş) -> --budget … --offload-ar --phase-offload --shared-gpu-memory
+Faz bazlı yerleşim: token üretiminde modelin AR yarısı (~4.4 GB), ses sentezinde NAR yarısı (~2.8 GB) …
+INFO:     Uvicorn running on http://127.0.0.1:7861 (Press CTRL+C to quit)
+```
+
+Ağırlıklar arka planda yüklenir. Hazır olup olmadığını ikinci bir pencerede sor (PowerShell'de `curl` yerine
+`curl.exe` yaz):
+
+```bat
+curl -s http://127.0.0.1:7861/health
+```
+
+`"model_loaded":true` ve `"device":"cuda…"` görünmeli; SheetSage2 kurulduysa `"sheetsage":true`.
+
+Pencere 2, arayüz: `frontend\start.bat` → http://127.0.0.1:7870 (web arayüzü) ya da `start_ui_windows.bat` →
+http://127.0.0.1:7860 (Gradio).
+
+✖ Olmazsa:
+- **`Model agirliklari bulunamadi`**: `C:\yueModel\models\YuE2-3B\model.safetensors` yok; adım 3'ü tekrar çalıştır.
+- **`Python ortami bulunamadi`**: adım 3 tamamlanmamış.
+- **`Ekran kartında yalnızca … GiB boş`**: tarayıcı, oyun gibi kartı kullanan uygulamaları kapat. Monitör karta bağlı
+  olduğu için masaüstü de VRAM kullanır.
+- **`Bu PyTorch FlashAttention olmadan derlenmiş`**: hata değil; token üretimi standart attention'la, biraz daha yavaş
+  çalışır ([rtx3050-windows-raporu.md §5](rtx3050-windows-raporu.md#5-flashattention-yedeği)).
+- **Arayüz "Model sunucusu bağlı değil" diyor**: pencere 1 açık mı, `/health` yanıt veriyor mu bak. Arayüz sunucuyu
+  5 sn'de bir yoklar; sunucu açılınca kendiliğinden bağlanır.
+
+**Adım 7 — İlk gerçek üretim ve ölçüm**
+
+1. **Text to Song**, kısa: 8–12 satır söz, ⚡ Hızlı sentez açık, diğer ayarlar varsayılan.
+2. **Cover**, ~1 dakikalık bir bölüm (*Başlangıç* / *Süre*), Nota çıkarıcı *SheetSage2*.
+3. Üretim sürerken Görev Yöneticisi → Performans → GPU: *Paylaşılan GPU belleği* artıyorsa karta sığmayan kısım
+   sistem RAM'ine taşıyor demektir. Üretim yavaşlar ama hata vermez; CFG'yi 1'de tut, şarkıyı kısalt.
+4. Not al: açılıştaki `--budget auto: …` satırı, şarkı süresi ve üretim süresi. Hata çıktıysa sunucu penceresinin
+   son 20–30 satırı.
+
+**Uyku ayarı.** Üretim sürerken bilgisayar uykuya geçerse iş yarıda kalır ve sunucu yeniden açılınca `failed`
+görünür. *Ayarlar → Sistem → Güç* altında, prize takılıyken uyku süresini *Hiçbir zaman* yap.
+
+**(İsteğe bağlı) Aynı ağdaki başka cihazdan erişim.** Sunucular varsayılan olarak yalnızca bu bilgisayardan açılır.
+Telefondan ya da başka bir bilgisayardan denemek için yalnızca web arayüzü ağa açılır:
+`frontend\start.bat --host 0.0.0.0 --password PAROLA` (parola özel karakter içeriyorsa önce
+`set YUE2_WEB_PASSWORD=PAROLA`). Windows Güvenlik Duvarı soru sorarsa yalnızca *Özel ağlar*'a izin ver. Adres:
+`ipconfig` çıktısındaki IPv4 adresi, `http://<IPv4>:7870`. Model sunucusu (7861) ağa açılmaz.
+
+> **Her gün (kurulumdan sonra):** pencere 1'de `start_model_server.bat --preload`, pencere 2'de `frontend\start.bat`,
+> tarayıcıda http://127.0.0.1:7870. Kapatmak için iki pencerede Ctrl+C. Kod güncellemesi: `git pull`;
+> `setup_windows.bat`'taki paket listesi değiştiyse kurulumu bir kez daha çalıştır (kurulu olanlar atlanır).
+
+Ayrıntı: [README › Windows](../README.md#windows), [rtx3050-windows-raporu.md](rtx3050-windows-raporu.md).
+
+### 4.5 Ubuntu: kurulum ve başlatma
+
+**Hiç denenmedi; kurulum betiği yok.** Kod Linux'u destekler: model sunucusu ortam yollarını (`bin/python`) kendisi
+seçer, Mac'teki `.sh` betikleri Linux'ta da çalışır. Aşağıdaki adımlar `setup_windows.bat`'ın Linux karşılığıdır ve
+onun paket listesini kullanır. Hedef: Ubuntu 22.04 ya da 24.04 LTS, NVIDIA kart. AMD kartlar (ROCm) desteklenmiyor.
+
+**Gerekenler:** NVIDIA kart ve sürücüsü, ~40 GB boş disk (iki CUDA'lı torch ortamı + ~15 GB ağırlık), ~16 GB RAM,
+kurulum sırasında internet ve `sudo` yetkisi. Python, CUDA araç seti ve ffmpeg gerekmez.
+
+> **WSL2 ise** (Ubuntu, Windows makinesinin içinde çalışıyorsa): adım 1'deki sürücü kurulumu **atlanır**. WSL'de
+> GPU'yu Windows'taki NVIDIA sürücüsü sağlar, WSL içine Linux NVIDIA sürücüsü kurulmaz; `nvidia-smi` doğrudan
+> çalışmalı. Depoyu ve ağırlıkları `/mnt/c` altında değil Linux ev klasöründe (`~/yueModel`) tut: `/mnt/c` üzerinden
+> dosya okumak çok yavaştır. Windows'ta inmiş ağırlıklar `cp -r /mnt/c/yueModel/models ~/yueModel/` ile alınabilir.
+> Windows tarayıcısı WSL'deki sunucuya `http://127.0.0.1:7870` ile ulaşır. systemd servisleri için `/etc/wsl.conf`'ta
+> `[boot]` altında `systemd=true` olmalı. Sunucu WSL'de Linux gibi davranır (`--shared-gpu-memory` kendiliğinden
+> açılmaz); WSL'de paylaşımlı GPU belleğine taşma olup olmadığı denenmedi.
+
+**Windows'tan farkları:**
+
+| Konu | Windows | Ubuntu |
+|---|---|---|
+| Betikler | `.bat` | `.sh`: `start_model_server.sh`, `frontend/start.sh`, `start_ui_mac.sh` (adına rağmen Linux'ta da çalışır) |
+| Kurulum | `setup_windows.bat` | Yok; aşağıdaki adımlar elle |
+| Ortamlar | Tek ortam (`yue_ortam`) | Mac'teki gibi üç ortam: `yue_ortam` (model), `yue-ui/venv` (Gradio, mock sunucu, testler; `.sh` betikleri bunu arar), `sheetsage_ortam` |
+| `--budget auto` | `start_model_server.bat` kendisi verir | **`start_model_server.sh` vermez**, bütçe 24 GiB kalır. 24 GB'tan küçük kartta elle eklenmeli |
+| Karta sığmayan bellek | Sürücü sistem RAM'ine taşır (yavaşlar) | Taşma yok: doğrudan `CUDA out of memory` |
+| CUDA araç seti (toolkit) | Gerekmez | Gerekmez; yalnızca sürücü. PyTorch paketleri CUDA'yı kendisi getirir |
+| FlashAttention | PyTorch paketinde olmayabilir (yedek yol var) | Linux paketlerinde var |
+| `--backend vllm` | Yok | Mümkün (`yue2[fast]`), denenmedi. vLLM kendi torch sürümünü isteyebilir; ayrı bir ortamda denenmeli |
+
+**1. Sürücü ve sistem paketleri**
+
+```bash
+sudo apt update && sudo apt install -y git curl
+ubuntu-drivers devices            # "recommended" yazan sürücü
+sudo ubuntu-drivers install       # eski sürümlerde: sudo ubuntu-drivers autoinstall
+sudo reboot
+nvidia-smi                        # kart adı ve sürücü sürümü görünmeli
+```
+
+Secure Boot açıksa kurulum bir MOK parolası ister; yeniden başlatmada mavi ekranda *Enroll MOK* seçilip bu parola
+girilmezse sürücü yüklenmez (bkz. 4.6).
+
+**2. uv** (Python'u ve paketleri kurar; Ubuntu'nun Python sürümünden bağımsız olarak 3.12 ve 3.11'i kendisi indirir)
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env       # ya da yeni bir terminal
+uv --version
+```
+
+Ubuntu 23.04 ve sonrasında sistem Python'una `pip install` yapılamaz (PEP 668). 4.2'deki Mac adımı
+`python3 -m pip install uv` burada hata verir; her şey uv ile ortamlara kurulur.
+
+**3. Depo**
+
+```bash
+mkdir -p ~/yueModel && cd ~/yueModel
+git clone https://github.com/batuhansahin1/yueModelDemo.git yue-ui
+cd yue-ui
+```
+
+Aşağıdaki bütün komutlar `~/yueModel/yue-ui` içinde ve **aynı terminalde** çalıştırılır (`TORCH_INDEX` 7. adımda
+tekrar kullanılıyor).
+
+**4. Model ortamı** (`../yue_ortam`; `setup_windows.bat` 3/5 adımının karşılığı)
+
+```bash
+TORCH_INDEX=https://download.pytorch.org/whl/cu128     # sürücü eskiyse cu126
+uv venv --python 3.12 ../yue_ortam
+uv pip install --python ../yue_ortam/bin/python torch==2.10.0 torchaudio==2.10.0 --index-url $TORCH_INDEX
+uv pip install --python ../yue_ortam/bin/python wheels/yue2_infer-0.1.5-py3-none-any.whl \
+    fastapi==0.136.1 uvicorn==0.46.0 librosa "julius>=0.2.3" dora-search einops pyyaml omegaconf
+uv pip install --python ../yue_ortam/bin/python --no-deps demucs==4.0.1 openunmix
+../yue_ortam/bin/python -c "import torch, yue2, demucs.pretrained, librosa; print('torch', torch.__version__, '| CUDA', torch.cuda.is_available(), '| yue2', yue2.__version__)"
+```
+
+✔ `torch 2.10.0+cu128 | CUDA True | yue2 0.1.5`. Torch önce CUDA dizininden kurulur; yue2'nin `torch==2.10.0`
+şartını karşıladığı için sonraki komut onu değiştirmez.
+
+**5. Arayüz ortamı** (`venv`: Gradio, mock sunucu ve testler)
+
+```bash
+uv venv --python 3.12 venv
+uv pip install --python venv/bin/python -r requirements-yue2-ui.txt
+```
+
+`start_ui_mac.sh`, `venv` yoksa onu sistemdeki `python3.12 -m venv` ile kurmaya çalışır ve Ubuntu'da bu çoğunlukla
+başarısız olur. `venv`'i bu adımla önceden kurmak bunu önler.
+
+**6. Ağırlıklar** (~15 GB; yalnızca eksik olan iner, yarıda kalırsa kaldığı yerden sürer)
+
+```bash
+../yue_ortam/bin/python download_models.py ../models --sheetsage
+```
+
+İnternet yavaşsa Mac'ten kopyalanabilir. Mac'te *Sistem Ayarları → Genel → Paylaşma → Uzaktan Giriş* açılır, sonra
+Ubuntu'da:
+
+```bash
+rsync -aP KULLANICI@MAC_ADRESI:Desktop/yueModel/models/ ~/yueModel/models/
+mkdir -p ~/.cache/huggingface/hub
+rsync -aP KULLANICI@MAC_ADRESI:.cache/huggingface/hub/models--m-a-p--MERT-v2-FullSong ~/.cache/huggingface/hub/
+../yue_ortam/bin/python download_models.py ../models --sheetsage    # her model için "Var:" yazmalı
+```
+
+**7. SheetSage2 ortamı** (isteğe bağlı; kurulmazsa Cover'da *Basit analiz* kullanılır. 6. adımdan sonra çalışır,
+çünkü paket listesi `models/SheetSage2/requirements.txt`'tedir)
+
+```bash
+uv venv --python 3.11 ../sheetsage_ortam
+uv pip install --python ../sheetsage_ortam/bin/python torch==2.8.0 torchaudio==2.8.0 --index-url $TORCH_INDEX
+uv pip install --python ../sheetsage_ortam/bin/python -r ../models/SheetSage2/requirements.txt
+../sheetsage_ortam/bin/python -c "import torch, transformers; print('SheetSage2 hazır | torch', torch.__version__, '| CUDA', torch.cuda.is_available())"
+```
+
+**8. Doğrulama** (sürümler, cihaz, ağırlıkların SHA-256 özetleri)
+
+```bash
+../yue_ortam/bin/yue2 doctor --model ../models/YuE2-3B --vae ../models/YuE2-Vae --offline --verify-hashes
+```
+
+**9. Başlatma**
+
+Modelsiz deneme (model ve GPU gerekmez):
+
+```bash
+./frontend/start.sh --mock        # http://127.0.0.1:7870
+./frontend/test.sh server         # isteğe bağlı: web sunucusu + mock sunucu testleri
+```
+
+Gerçek model, iki terminalde:
+
+```bash
+./start_model_server.sh --preload --budget auto     # --budget auto'yu unutma (yukarıdaki tablo)
+./frontend/start.sh                                  # web arayüzü :7870; ya da ./start_ui_mac.sh (Gradio, :7860)
+curl -s 127.0.0.1:7861/health                        # "model_loaded":true, "device":"cuda…"
+```
+
+8–12 GB kartta açılış satırı `--offload-ar --phase-offload` gösterir ve ardından *"paylaşımlı GPU belleği yalnızca
+Windows'ta var"* uyarısı gelir. Bu beklenen bir durumdur; bellek hatası alınırsa 4.6'daki OOM satırlarına bak.
+
+**Başka bir bilgisayardan erişim.** Sunucular yalnızca `127.0.0.1`'i dinler. Ubuntu makinesi ekransız bir sunucuysa
+en güvenli yol SSH tünelidir; kendi bilgisayarında:
+
+```bash
+ssh -L 7870:127.0.0.1:7870 KULLANICI@UBUNTU_ADRESI      # sonra tarayıcıda http://127.0.0.1:7870
+```
+
+Ağa açmak gerekirse yalnızca web arayüzü açılır: `./frontend/start.sh --host 0.0.0.0 --password PAROLA` ve
+`sudo ufw allow 7870/tcp`. İnternete açılacaksa önüne TLS'li bir ters vekil şarttır (bkz. bölüm 9, "Herkese açık
+site"). Model sunucusu (7861) hiçbir zaman dışarı açılmaz.
+
+**Kalıcı çalıştırma (systemd).** Terminalde başlatılan sunucular SSH oturumu kapanınca kapanır. Kısa denemelerde
+`tmux` yeter; sürekli çalışacak bir sunucuda iki servis tanımlanır (`KULLANICI` yerine kendi kullanıcı adın):
+
+```ini
+# /etc/systemd/system/yue2-model.service
+[Unit]
+Description=YuE2 model sunucusu (:7861)
+After=network.target
+
+[Service]
+User=KULLANICI
+WorkingDirectory=/home/KULLANICI/yueModel/yue-ui
+Environment=PYTHONUTF8=1 PYTHONUNBUFFERED=1
+ExecStart=/home/KULLANICI/yueModel/yue-ui/start_model_server.sh --preload --budget auto --keep-loaded
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```ini
+# /etc/systemd/system/yue2-web.service
+[Unit]
+Description=YuE2 web arayüzü (:7870)
+After=yue2-model.service
+
+[Service]
+User=KULLANICI
+WorkingDirectory=/home/KULLANICI/yueModel/yue-ui
+Environment=PYTHONUTF8=1 PYTHONUNBUFFERED=1
+ExecStart=/home/KULLANICI/yueModel/yue-ui/frontend/start.sh
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now yue2-model yue2-web
+systemctl status yue2-model
+journalctl -u yue2-model -f        # sunucu logu (Ctrl+C yalnızca log izlemeyi bırakır)
+```
+
+- `--keep-loaded`: ağırlıklar işler arasında GPU'da kalır (Colab'daki gibi); ilk iş beklemez. Kart başka işlerle
+  paylaşılacaksa kaldırılır.
+- `HF_HOME` değiştirildiyse model servisine `Environment=HF_HOME=/yol` eklenir; yoksa servis MERT-v2'yi bulamaz.
+- Servisler `User=` ile kurulumu yapan kullanıcı olarak çalışmalı: ortamlar, ağırlıklar ve Hugging Face önbelleği o
+  kullanıcının ev klasöründe.
+- Masaüstü Ubuntu'da *Ayarlar → Güç* altında otomatik askıya alma kapatılmalı; askıya alınan makinede süren iş
+  yarıda kalır ve `failed` olur.
+
+> **Her gün (kurulumdan sonra):** servis yoksa iki terminalde `./start_model_server.sh --preload --budget auto` ve
+> `./frontend/start.sh`; kapatmak için Ctrl+C. Servis varsa makine açılınca kendiliğinden başlar; elle
+> `sudo systemctl stop|start|restart yue2-model yue2-web`. Kod güncellemesi: `git pull`; paket listesi değiştiyse 4, 5
+> ve 7. adımlardaki `uv pip install` komutlarını tekrar çalıştır (kurulu olanlar atlanır), sonra
+> `sudo systemctl restart yue2-model yue2-web`.
+
+### 4.6 Ubuntu: olası sorunlar ve çözümleri
+
+Ubuntu'da hiç çalıştırılmadığı için bu tablo koddan ve betiklerden çıkarıldı; ilk kurulumda karşılaşılanlar buraya
+eklenmeli.
+
+**Kurulum**
+
+| Belirti | Neden | Çözüm |
+|---|---|---|
+| `nvidia-smi: command not found` ya da `NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver` | Sürücü kurulu değil ya da Secure Boot imzasız çekirdek modülünü engelledi | `sudo ubuntu-drivers install`, yeniden başlat. `mokutil --sb-state` "enabled" diyorsa yeniden başlatmada *Enroll MOK* adımını tamamla ya da BIOS'ta Secure Boot'u kapat |
+| `error: externally-managed-environment` | Ubuntu 23.04+ sistem Python'una pip ile kurulumu engelliyor (PEP 668) | Sistem pip'ini kullanma: uv'yi `curl` ile kur (4.5 adım 2), paketleri `uv pip install --python <ortam>/bin/python` ile ortama kur |
+| `uv: command not found` (kurulumdan hemen sonra) | `~/.local/bin` PATH'te değil | `source $HOME/.local/bin/env` ya da yeni terminal |
+| `./start_ui_mac.sh` → `python3.12: command not found` ya da `ensurepip is not available` | `venv` yoksa betik sistemdeki `python3.12 -m venv`'i dener. 22.04'te Python 3.12 yok; 24.04'te `python3.12-venv` paketi kurulu değil | `rm -rf venv`, sonra 4.5 adım 5 (uv ile `venv`). Yalnızca 24.04'te alternatif: `sudo apt install python3.12-venv` |
+| SheetSage2 kurulumunda `numpy==1.24.3` derlenmeye çalışılıyor, `Failed to build numpy` | Ortam Python 3.11 değil; numpy 1.24.3'ün 3.12 için hazır paketi yok | `rm -rf ../sheetsage_ortam`, `uv venv --python 3.11 ../sheetsage_ortam` ile yeniden (adım 7) |
+| `/bin/bash^M: bad interpreter` | `.sh` dosyası CRLF satır sonlu: Windows'tan kopyalandı ya da ZIP ile geldi | `sed -i 's/\r$//' *.sh frontend/*.sh colab/*.sh`; ya da depoyu `git clone` ile al (`.gitattributes` `.sh`'leri LF tutar) |
+| `./start_model_server.sh: Permission denied` | Çalıştırma izni kopyalarken kayboldu (USB, ZIP) | `chmod +x *.sh frontend/*.sh colab/*.sh` |
+| `../yue_ortam/bin/python: No such file or directory` ya da `cannot execute binary file` | Ortam Mac'ten ya da Windows'tan kopyalandı. Ortamlar taşınamaz; Mac'teki `bin/python` macOS'un Python'unu gösterir | Ortam klasörlerini sil, 4.5 adım 4, 5, 7 ile yeniden kur. Makineler arasında yalnızca `models/` (ve MERT-v2 önbelleği) kopyalanır |
+| `./start_model_server.sh` → `../yue_ortam/bin/pip: No such file or directory` | Betik `fastapi` eksikse onu `pip` ile kurmaya çalışır; uv'nin kurduğu ortamlarda `pip` yoktur | `uv pip install --python ../yue_ortam/bin/python fastapi==0.136.1 uvicorn==0.46.0` (4.5 adım 4 bunu zaten kurar) |
+| `No space left on device` | İki CUDA'lı torch ortamı (her biri birkaç GB), uv önbelleği, ~15 GB ağırlık | `df -h`; `uv cache clean`. Hugging Face önbelleğini büyük diske taşımak için `export HF_HOME=/disk/hf` (servise de). ~40 GB boş yer ayır |
+
+**GPU ve model sunucusu**
+
+| Belirti | Neden | Çözüm |
+|---|---|---|
+| `/health`'te `"device":"cpu"`, açılışta `--budget auto: NVIDIA GPU bulunamadı` | torch CUDA'yı görmüyor: sürücü yok ya da eski, veya torch'un CPU sürümü kurulu | `../yue_ortam/bin/python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"`. Sürüm `+cpu` ise ortamı silip adım 4'ü `--index-url` ile tekrarla. `The NVIDIA driver on your system is too old` uyarısı varsa sürücüyü güncelle ya da ortamı silip `TORCH_INDEX=https://download.pytorch.org/whl/cu126` ile kur (kurulu `2.10.0` yeniden inmez, silmek şart) |
+| İlk işte `torch.OutOfMemoryError: CUDA out of memory` (8–16 GB kart) | `start_model_server.sh` `--budget auto` vermez; bütçe 24 GiB kalır, `--offload-ar`/`--phase-offload` açılmaz | `--budget auto` ile başlat. Açılış satırında `--offload-ar` (12 GB altında ayrıca `--phase-offload`) görünmeli |
+| `--budget auto` ile de uzun şarkıda `CUDA out of memory` | Linux'ta paylaşımlı GPU belleği yok. CFG > 1 ya da Nota planı *Kapalı* KV önbelleğini iki katına çıkarır | CFG 1, Nota planı açık, şarkıyı kısalt (Cover'da *Süre*). Masaüstü aynı kartı kullanıyorsa `nvidia-smi`'de `Xorg`/`gnome-shell` belleğine bak; makineyi ekransız çalıştırmak (`sudo systemctl set-default multi-user.target`) birkaç yüz MB ile ~1 GB kazandırır |
+| `Model ağırlıkları bulunamadı`, klasör var gibi görünüyor | Linux büyük/küçük harf ayırır: `YuE2-Vae` ile `YuE2-VAE` farklıdır (Mac'te fark etmez) | Klasör adları bölüm 2'deki tablodakiyle birebir aynı olmalı |
+| Cover'da `SheetSage2 kurulu değil, eksik: …/sheetsage_ortam/bin/python` | Ortam kurulmadı ya da başka yerde | 4.5 adım 7; ya da `--sheetsage-python /yol/bin/python` |
+| SheetSage2 analizinde MERT-v2 bulunamadı (`LocalEntryNotFoundError`, `couldn't connect to huggingface.co`) | Sunucu çevrimdışı (`HF_HUB_OFFLINE=1`); MERT-v2 inmemiş ya da servis başka kullanıcı/başka `HF_HOME` ile çalışıyor | `download_models.py ../models --sheetsage`; servis kurulumu yapan kullanıcıyla ve aynı `HF_HOME` ile çalışmalı |
+| MP3 hatası (`Format not recognised`, `Error opening … .mp3`) | soundfile eski bir sistem libsndfile'ını kullanıyor; MP3 desteği libsndfile 1.1.0'da geldi | `../yue_ortam/bin/python -c "import soundfile; print(soundfile.__libsndfile_version__)"` en az 1.1.0 olmalı. uv'nin kurduğu `soundfile==0.13.1` kendi libsndfile'ını (1.2.x) getirir; apt'nin `python3-soundfile` paketi ortama karışmamalı |
+| `[Errno 98] Address already in use` | Port dolu: önceki sunucu ya da arka planda kalan mock sunucu | `ss -ltnp \| grep 786` ile süreci bul, `kill <pid>`. Mock için `YUE2_MOCK_PORT=7863 ./frontend/start.sh --mock` |
+
+**Erişim ve testler**
+
+| Belirti | Neden | Çözüm |
+|---|---|---|
+| Başka bilgisayardan açılmıyor | Sunucular yalnızca `127.0.0.1`'i dinler (tasarım gereği) | SSH tüneli (4.5). Ağa açmak: web arayüzü `--host 0.0.0.0 --password …` + `sudo ufw allow 7870/tcp`. Gradio `./start_ui_mac.sh --server_name 0.0.0.0` ile açılır ama parolası yoktur. 7861 açılmaz |
+| SSH kapanınca sunucu da kapanıyor | Süreç terminale bağlı | `tmux` ya da systemd servisleri (4.5) |
+| `./frontend/test.sh` Node testlerini atlıyor ya da e2e hata veriyor | Ubuntu deposundaki Node eski: 22.04'te 12, 24.04'te 18. Mantık testleri Node 18+, e2e Node 22+ ister | Node 22'yi nvm ya da NodeSource ile kur |
+| `Chrome bulunamadı: tarayıcı testleri atlandı`, ya da e2e Chromium'u açıp takılıyor | Test `/usr/bin/google-chrome`, `/usr/bin/chromium`, `/usr/bin/chromium-browser` arar. Ubuntu'nun Chromium'u snap paketidir; snap'in kendi `/tmp`'si olduğu için testin geçici profil klasörünü göremeyebilir | Google Chrome'un `.deb` paketini kur ya da `CHROME=/yol/chrome ./frontend/test.sh e2e` |
+
+### 4.7 Model sunucusu seçenekleri
 
 | Seçenek | Varsayılan | Açıklama |
 |---|---|---|
@@ -245,7 +671,8 @@ Ayrıntı: [README › Windows](../README.md#windows), [rtx3050-windows-raporu.m
 | `--sheetsage`, `--sheetsage-python` | `../models/SheetSage2`, `../sheetsage_ortam/...` | SheetSage2 klasörü ve ortamının Python'u |
 | `--outputs`, `--host`, `--port` | `yue-ui/outputs`, `127.0.0.1`, `7861` | |
 
-**`--budget auto`** ([resolve_budget](../server/yue2_server.py#L544)): yalnızca `start_model_server.bat` kullanır.
+**`--budget auto`** ([resolve_budget](../server/yue2_server.py#L544)): yalnızca `start_model_server.bat` kullanır;
+Ubuntu'da `start_model_server.sh`'ye elle eklenir (4.5).
 Bütçe = kartın belleği; 20 GiB altında `--offload-ar`; 13 GiB altında `--phase-offload` (Windows'ta ayrıca
 `--shared-gpu-memory`). Mac betiği bütçeyi vermez (24); Colab notebook'u kartın belleğini ve 20 GiB altında
 `--offload-ar`'ı kendisi verir.
@@ -354,7 +781,7 @@ Dışarıdan ABC verildiğinde (Cover) nota planı aşaması atlanır, model ver
 | ABC örneklemesi | temp 0.7, top-p 0.9, top-k 30, ceza 1.005/100, token 32–4096 | Nota planı aşaması |
 | Şarkı örneklemesi | temp 1.0, top-p 0.95, top-k 100, ceza 1.2/50, token 200–9000 | Ses token'ları aşaması (~25 token = 1 sn ses; 9000 ≈ 6 dk) |
 
-Belleği ve arka ucu etkileyen ayarlar iş başına değil, sunucu başlatılırken verilir (4.4) ve müziği değiştirmez.
+Belleği ve arka ucu etkileyen ayarlar iş başına değil, sunucu başlatılırken verilir (4.7) ve müziği değiştirmez.
 
 ### 5.6 Sunucu bellek modları (donanıma göre)
 
@@ -472,10 +899,10 @@ değiştirmeli:
 
 | Değişiklik | Notebook'ta | Eşleri |
 |---|---|---|
-| `yue_ortam` paket listesi | Hücre 4: `REQS`, `NODEPS` | `setup_windows.bat` (3/5 adım), Mac kurulumu (4.2) |
+| `yue_ortam` paket listesi | Hücre 4: `REQS`, `NODEPS` | `setup_windows.bat` (3/5 adım), Mac kurulumu (4.2), Ubuntu kurulumu (4.5 adım 4) |
 | İndirilen modeller ve dosya desenleri | Hücre 5, 5b | `download_models.py` |
-| SheetSage2 ortamı | Hücre 5b: `TORCH` | `setup_windows.bat` (5/5 adım) |
-| Sunucu argümanları | Hücre 6: `server_args` | `start_model_server.sh` / `.bat` |
+| SheetSage2 ortamı | Hücre 5b: `TORCH` | `setup_windows.bat` (5/5 adım), Ubuntu kurulumu (4.5 adım 7) |
+| Sunucu argümanları | Hücre 6: `server_args` | `start_model_server.sh` / `.bat`, Ubuntu systemd servisi (4.5) |
 | Arayüzün başlatılması | Hücre 7 | `start_ui_mac.sh`, `start_ui_windows.bat` |
 | Pakete giren dosyalar, zip adı | Hücre 3 (`BUNDLE`, `/content/yue-ui`) | `make_bundle.sh` |
 | Kullanıcıya yönelik anlatım | Markdown hücreleri | `COLAB_YOL_HARITASI.md`, `README.md` |
@@ -539,6 +966,7 @@ alt yolunda çalışması beklenir; Colab'da doğrulanmalı.
 | Konu | Durum / öneri |
 |---|---|
 | Windows + RTX 3050 | Hiç çalıştırılmadı. İlk çalıştırmada beklenmeyen hata çıkabilir (FlashAttention, sürücü, yollar) |
+| Ubuntu | Hiç çalıştırılmadı, kurulum betiği yok. `start_model_server.sh` `--budget auto` vermez; Linux'ta paylaşımlı GPU belleği olmadığı için 8–12 GB kartta uzun şarkı + CFG bellek hatası verir (4.6) |
 | Mac'te uzun şarkılar | ~6 dk'lık şarkı sentezde OOM; saatlerce hesap boşa gidebilir |
 | Cover · Serbest'te eşlik orijinale benziyor | Önerilip yapılmayanlar: CFG 1.5–2.5 + orijinalden farklı enstrüman etiketleri; "Enstrüman ezgilerini gönderme" seçeneği (`V: Ins` satırlarını SheetSage2'nin boş biçimi `Z<n>\|` ile değiştirmek). Hedef sık değiştiği için önce proje sahibiyle karar verilmeli |
 | Basit analizde tempo | 4/3 ya da 2 kat yanılabiliyor; ölçü başları tahmin edilmiyor (4/4 varsayılıyor) |
@@ -557,7 +985,7 @@ alt yolunda çalışması beklenir; Colab'da doğrulanmalı.
 
 | # | İş | Tahmini | Nereler değişir |
 |---|---|---|---|
-| 1 | Commit edilmemiş belgeleri (bu belge dahil) depoya almak | dakikalar | `docs/` |
+| 1 | Commit edilmemiş belgeleri (bölüm 2) depoya almak | dakikalar | `docs/` |
 | 2 | Güncel koddan Colab paketini üretip bir oturumda Text to Song + Cover denemek (6.2'deki not) | yarım gün | `colab/` |
 | 3 | Windows'ta RTX 3050 ile ilk deneme ve ölçüm (`--budget auto` satırı, VRAM, süre) | 1 gün | Kod değişikliği beklenmiyor; [resolve_budget](../server/yue2_server.py#L544) |
 | 4 | Colab'da Sözleri tanı ve GPU paylaşımı testi | yarım gün | [make_room](../server/yue2_server.py#L595), [gpu_for_analysis](../server/yue2_server.py#L483) |
@@ -567,6 +995,7 @@ alt yolunda çalışması beklenir; Colab'da doğrulanmalı.
 | 8 | Hızlı sentez ve FP8 için kalite dinlemesi | yarım gün | – |
 | 9 | Eskimiş belgeleri güncellemek (9'daki liste) | yarım gün | `docs/`, `colab/COLAB_YOL_HARITASI.md` |
 | 10 | Model sunucusu için mock tabanlı otomatik testler | 1 gün | yeni `server/tests/` |
+| 11 | Ubuntu'da ilk kurulum (4.5); adımlar tutarsa `setup_linux.sh` betiğine çevirmek, `start_model_server.sh`'ye `--budget auto` eklemek (Mac'te etkisiz: GPU bulamayınca 24 GiB kalır), 4.6'yı karşılaşılan hatalarla güncellemek | 1 gün | `setup_linux.sh` (yeni), `start_model_server.sh` |
 
 Kuyruk tasarımında alınmış karar: kullanıcıya sıra numarası ("önünüzde N şarkı var") gösterilmeyecek; yalnızca
 şarkının ne zaman hazır olacağı (tahmini süre) gösterilecek. GPU başına tek iş çalıştığı için yük altındaki asıl sorun
